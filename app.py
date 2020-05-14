@@ -10,6 +10,10 @@ import requests
 import json
 import os
 
+from flask import Flask
+app = Flask(__name__)
+
+
 # Global variables
 figma_token = os.environ.get('figma_token')
 figma_team = os.environ.get('figma_team')
@@ -50,6 +54,7 @@ def getProjectFiles():
         projects_and_files.append(response.json())
 
 
+@app.route('/')
 def main():
     setHeaders()
     getTeamAndProjects()
@@ -61,5 +66,5 @@ def main():
 
 
 # Main body
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
