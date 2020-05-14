@@ -38,7 +38,6 @@ def getTeamAndProjects():
     url = "https://api.figma.com/v1/teams/" + figma_team + "/projects"
     response = requests.request("GET", url, headers=headers)
     respJson = response.json()
-    print(respJson)
     team_name = respJson["name"]
     project_name_list = respJson["projects"]
 
@@ -58,6 +57,7 @@ def main():
     pp = pprint.PrettyPrinter(indent=4, width=80, compact=False)
     # pp.pprint(projects_and_files)
     print(json.dumps(projects_and_files))
+    return json.dumps(projects_and_files)
 
 
 # Main body
