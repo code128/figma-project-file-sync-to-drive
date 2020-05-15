@@ -4,13 +4,14 @@ Module documentation.
 """
 
 # Imports
+from googleapiclient.discovery import build
 import pprint
 import sys
 import requests
 import json
 import os
 
-from flask import Flask
+from flask import Flask, make_response, jsonify
 app = Flask(__name__)
 
 
@@ -54,15 +55,31 @@ def getProjectFiles():
         projects_and_files.append(response.json())
 
 
+# If modifying these scopes, delete the file token.pickle.
+SCOPES = ['https://www.googleapis.com/auth/documents.readonly']
+# The ID of a sample document.
+DOCUMENT_ID = '1vGIk9uDHd3KP7Yb2b0r_SNH9h3ZJQDlydVxI1KUQ9u8'
+
+
+def testServiceAccount():
+    service = build('docs', 'v1')
+    # Retrieve the documents contents from the Docs service.
+    document = service.documents().get(documentId=DOCUMENT_ID).execute()
+    print('The title of the document is: {}'.format(document.get('title')))
+
+
 @app.route('/')
 def main():
-    setHeaders()
-    getTeamAndProjects()
-    getProjectFiles()
-    pp = pprint.PrettyPrinter(indent=4, width=80, compact=False)
-    # pp.pprint(projects_and_files)
-    print(json.dumps(projects_and_files))
-    return json.dumps(projects_and_files)
+    testServiceAccount()
+    data = {'message': 'Created', 'code': 'SUCCESS'}
+    return make_response(jsonify(data), 201)
+    # setHeaders()
+    # getTeamAndProjects()
+    # getProjectFiles()
+    # pp = pprint.PrettyPrinter(indent=4, width=80, compact=False)
+    # # pp.pprint(projects_and_files)
+    # # print(json.dumps(projects_and_files))
+    # return json.dumps(projects_and_files)
 
 
 # Main body
