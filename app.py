@@ -13,16 +13,11 @@ from flask import Flask, make_response, jsonify, render_template
 app = Flask(__name__)
 
 
-@app.template_filter()
-def friendly_time(value):
-    return arrow.get(value).humanize()
+# Env variables
+spreadsheet_id = os.environ.get('spreadsheet_id')
 
+# Global Vars
 
-# Global variables
-figma_token = os.environ.get('figma_token')
-figma_team = os.environ.get('figma_team')
-google_drive_folder_id = os.environ.get('google_drive_folder_id')
-created_file_name = os.environ.get('created_file_name')
 team_name = ""
 headers = {
     'Accept': "*/*",
@@ -32,15 +27,24 @@ headers = {
     'Connection': "keep-alive",
     'cache-control': "no-cache"
 }
-headers["X-FIGMA-TOKEN"] = figma_token
 service = build('sheets', 'v4')
 plugin_id = '749778475482705952'
-spreadsheet_id = '1m4T72la8TcogXLECMGspXJkeWfPv0YxJ9-eJlGagLjs'
+
 google_slide_deck_prefix = 'https://docs.google.com/presentation/d/'
+buganizerPrefix = 'https://b.corp.google.com/issues/'
+configRange = "config!B:C"
 
 
-def getTeamAndProjects():
-    url = "https://api.figma.com/v1/teams/" + figma_team + "/projects"
+def getConfiguration():
+    # Grab the set of configuration information from the spreadsheet
+    request = service.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id, range=configRange)
+    response = request.execute()
+    return response["values"][1:]
+
+
+def getTeamAndProjects(team_id):
+    url = "https://api.figma.com/v1/teams/" + team_id + "/projects"
     response = requests.request("GET", url, headers=headers)
     respJson = response.json()
     team_name = respJson["name"]
@@ -71,7 +75,8 @@ def getFigmaFileSlideDeck(file_id):
     respJson = response.json()
     try:
         slideDeckID = respJson["document"]["pluginData"][plugin_id]["presentationId"]
-        return google_slide_deck_prefix + slideDeckID
+        friendly_name = "Slide Deck"
+        return createSheetsHyperlink(google_slide_deck_prefix + slideDeckID, friendly_name)
     except:
         return ""
 
@@ -84,15 +89,12 @@ def updateFilesWithDeeperData(projects_and_files):
             file["relatedSlideDeck"] = getFigmaFileSlideDeck(file["key"])
 
 
-def updateGoogleSheet(projects_and_files):
-    # Get a connection to the correct google sheet
-    # Go row by row looking for the files file["key’
-    # If it exists update it with the latest info from here (Tags, Users, Version Info, Version Count)
-    rangeCounter = 1
+def updateGoogleSheet(projects_and_files, range_counter):
     for project in projects_and_files:
         for file_info in project["files"]:
-            rangeCounter += 1
-            range_name = str(rangeCounter) + ":" + str(rangeCounter)
+            range_counter += 1
+            range_name = 'raw_data!' + \
+                str(range_counter) + ":" + str(range_counter)
             body = {
                 'values': [figmaFileInfoToSheetStyle(file_info, project)]
             }
@@ -100,6 +102,7 @@ def updateGoogleSheet(projects_and_files):
                 spreadsheetId=spreadsheet_id, range=range_name,
                 valueInputOption="USER_ENTERED", body=body).execute()
             print('{0} cells updated.'.format(result.get('updatedCells')))
+    return range_counter
 
 
 def getTags(description):
@@ -109,6 +112,17 @@ def getTags(description):
         regex = r"#\w+"
         matches = re.findall(regex, description, re.MULTILINE)
     return matches
+
+
+def getRelatedBuganizerTicket(title):
+    if title:
+        regex = r"b/\d+"
+        matches = re.findall(regex, title, re.MULTILINE)
+        if matches:
+            linkURL = buganizerPrefix + matches[0][2:]
+            friendlyURL = "b/" + matches[0][2:]
+            return createSheetsHyperlink(linkURL, friendlyURL)
+    return ""
 
 
 def figmaFileInfoToSheetStyle(file_data, project_data):
@@ -137,23 +151,26 @@ def figmaFileInfoToSheetStyle(file_data, project_data):
     label = versions[0]["label"]
     description = versions[0]["description"]
     tags = getTags(description)
+    # TODO How do we handle autosaves that lose the descriptions or tags??
+    # Perhaps we create a plugin to manange this kind of data?
+    figmaFileLink = createSheetsHyperlink(
+        "https://www.figma.com/file/"+file_data["key"], "Figma File")
 
     versionCount = len(versions)
-    if versionCount >= 30:
-        versionCount = "30+"
 
     returnData = [
         team_name,
         project_data["name"],
         file_data["name"],
+        getRelatedBuganizerTicket(file_data["name"]),
         file_data["key"],
-        "https://www.figma.com/file/" + file_data["key"],
+        figmaFileLink,
         file_data["relatedSlideDeck"],
         arrow.get(file_data["last_modified"]).date().isoformat(),
-        lastUser,
-        file_data["thumbnail_url"],
+        createMomaPersonLink(lastUser),
+        createSheetsImage(lastUserImg),
+        createSheetsImage(file_data["thumbnail_url"]),
         versionCount,
-        lastUserImg,
         label,
         description,
         ' '.join(tags)
@@ -163,14 +180,41 @@ def figmaFileInfoToSheetStyle(file_data, project_data):
 
 @ app.route('/')
 def main():
-    global team_name
-    team_name, project_list = getTeamAndProjects()
-    projects_and_files = getProjectFiles(project_list)
-    updateFilesWithDeeperData(projects_and_files)
-    # saveLocalJSON(projects_and_files)  # for debugging help
-    # projects_and_files = loadLocalJSON()
-    updateGoogleSheet(projects_and_files)
-    return make_response(jsonify(projects_and_files), 201)
+    teamList = getConfiguration()
+    range_counter = 1
+    for team in teamList:  # Skip the header row
+        global team_name, headers
+        headers["X-FIGMA-TOKEN"] = team[0]
+        team_id = team[1]
+        team_name, project_list = getTeamAndProjects(team_id)
+        print("Start: ", team_name + " []")
+        projects_and_files = getProjectFiles(project_list)
+        updateFilesWithDeeperData(projects_and_files)
+        # saveLocalJSON(projects_and_files)  # for debuggingp
+        # projects_and_files = loadLocalJSON() # for debugging
+        range_counter = updateGoogleSheet(projects_and_files, range_counter)
+        print("Complete: ", team_name + " [" + str(range_counter) + "]")
+    return make_response("Thanks", 201)
+
+
+#- Utilities -#
+
+@app.template_filter()
+def friendly_time(value):
+    return arrow.get(value).humanize()
+
+
+def createMomaPersonLink(name):
+    momaSearchLink = "https://moma.corp.google.com/search/people?q=" + name
+    return '=HYPERLINK("' + momaSearchLink + '", "' + name + '")'
+
+
+def createSheetsHyperlink(url, friendly_name):
+    return '=HYPERLINK("' + url + '", "' + friendly_name + '")'
+
+
+def createSheetsImage(image_url):
+    return '=IMAGE("' + image_url + '")'
 
 
 def loadLocalJSON():
@@ -187,5 +231,5 @@ def saveLocalJSON(info):
 
 # Main body
 if __name__ == "__main__":
-    main()
-    # app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    # main()
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))

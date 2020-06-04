@@ -10,6 +10,11 @@ Related Slide deck link
 Should we back it with a real data store and then use sheets/data dashboard to slice/dice.
 	Which would work best? firebase, firestore, datastore, sql? other?
 
+How can we track what's approved? in production etc? 
+Tagging by frame names? File Names, Dedicated pages?
+Can we mark status and trigger with cloud functions, notifications when "review needed"
+
+
 ## Updates
 Should sort by last updated.
 
