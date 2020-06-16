@@ -29,6 +29,7 @@ headers = {
 }
 service = build('sheets', 'v4')
 plugin_id = '749778475482705952'
+figma_api_url = "https://api.figma.com/v1/"
 
 google_slide_deck_prefix = 'https://docs.google.com/presentation/d/'
 buganizerPrefix = 'https://b.corp.google.com/issues/'
@@ -44,7 +45,7 @@ def getConfiguration():
 
 
 def getTeamAndProjects(team_id):
-    url = "https://api.figma.com/v1/teams/" + team_id + "/projects"
+    url = figma_api_url + "teams/" + team_id + "/projects"
     response = requests.request("GET", url, headers=headers)
     respJson = response.json()
     team_name = respJson["name"]
@@ -55,30 +56,59 @@ def getTeamAndProjects(team_id):
 def getProjectFiles(project_list):
     projects_and_files = []
     for project in project_list:
-        url = "https://api.figma.com/v1/projects/" + project["id"] + "/files"
+        url = figma_api_url + "projects/" + project["id"] + "/files"
         response = requests.request("GET", url, headers=headers)
         projects_and_files.append(response.json())
     return projects_and_files
 
 
 def getFigmaFileInformation(file_id):
-    url = "https://api.figma.com/v1/files/" + file_id + "/versions"
+    url = figma_api_url + "files/" + file_id + "/versions"
     response = requests.request("GET", url, headers=headers)
     respJson = response.json()
     return respJson
 
 
 def getFigmaFileSlideDeck(file_id):
-    url = "https://api.figma.com/v1/files/" + \
+    url = figma_api_url + "files/" + \
         file_id + "?depth=1&plugin_data=" + plugin_id
     response = requests.request("GET", url, headers=headers)
     respJson = response.json()
     try:
+        metadataNodeId = next(
+            (x for x in respJson["document"]["children"] if x["name"] == "_metadata"), None)["id"]
+    except:
+        metadataNodeId = ""
+
+    try:
         slideDeckID = respJson["document"]["pluginData"][plugin_id]["presentationId"]
         friendly_name = "Slide Deck"
-        return createSheetsHyperlink(google_slide_deck_prefix + slideDeckID, friendly_name)
+        slideDeckHyperlink = createSheetsHyperlink(
+            google_slide_deck_prefix + slideDeckID, friendly_name)
     except:
-        return ""
+        slideDeckHyperlink = ""
+    return slideDeckHyperlink, metadataNodeId
+
+
+def getFigmaFileGoogleMetadata(file_id, metadata_node_id=""):
+    if metadata_node_id == "":
+        return []
+    url = figma_api_url + "files/" + file_id + "/nodes?ids=" + metadata_node_id
+    response = requests.request("GET", url, headers=headers)
+    respJson = response.json()
+    gMetadata = []
+    childList = respJson["nodes"][metadata_node_id]["document"]["children"][0]["children"]
+    # This gets us the children of the first and only frame from this node
+    for child in childList:
+        try:
+            data = child["characters"].split(":")
+            item = {}
+            item["title"] = data[0]  # Everything before the first :
+            item["data"] = data[1].strip()
+            gMetadata.append(item)
+        except Exception as E:
+            print(E)
+    return gMetadata
 
 
 def updateFilesWithDeeperData(projects_and_files):
@@ -86,7 +116,10 @@ def updateFilesWithDeeperData(projects_and_files):
     for project in projects_and_files:
         for file in project["files"]:
             file["fileInfo"] = getFigmaFileInformation(file["key"])
-            file["relatedSlideDeck"] = getFigmaFileSlideDeck(file["key"])
+            file["relatedSlideDeck"], metadata_node_id = getFigmaFileSlideDeck(
+                file["key"])
+            file["g-metadata"] = getFigmaFileGoogleMetadata(
+                file["key"], metadata_node_id)
 
 
 def updateGoogleSheet(projects_and_files, range_counter):
@@ -146,17 +179,13 @@ def figmaFileInfoToSheetStyle(file_data, project_data):
     # 		"thumbnail_url": "https://s3-alpha-sig.figma.com/thumbnails/4c3c4d42-50fd-4f21-b6fa-9fe041a517ca?Expires=1591574400&Signature=dxKSU9zP5hATCJvfFNWyTy8f-1qz41F6BYlUjA-jcINRSM-jJiJUtB1OemCzKyRBWfN85CgJhg0GucVpeJfhcc~x~VEIpqqn-kgGdzE4t3yqgmIeOipuZb75owldyxegqxO5Q2QdPdT0DrYgsrEdI13eD8OV-MM-LiWQqjIwkp7pIEba86~~6oIKDRT-lUJl59oyZT-FLpncWdReMgNj6gUdE~pkxTLrGBSqZmH3ULkLamzrQ2HgxNh4oM2n3uhjXsCTdeSAYvefuqWt8-qYb7WpatxgYOEvccMvSU97FLzfLwjHQHyedry7BOR7Lw0YhDdRHWsZpFB-wRwY6Hxymg__&Key-Pair-Id=APKAINTVSUGEWH5XD5UA"
     # 		}
     versions = file_data["fileInfo"]["versions"]
-    lastUser = versions[0]["user"]["handle"]
-    lastUserImg = versions[0]["user"]["img_url"]
-    label = versions[0]["label"]
-    description = versions[0]["description"]
-    tags = getTags(description)
-    # TODO How do we handle autosaves that lose the descriptions or tags??
-    # Perhaps we create a plugin to manange this kind of data?
+
     figmaFileLink = createSheetsHyperlink(
         "https://www.figma.com/file/"+file_data["key"], "Figma File")
-
+    lastUser = versions[0]["user"]["handle"]
+    lastUserImg = versions[0]["user"]["img_url"]
     versionCount = len(versions)
+    metaData = file_data["g-metadata"]
 
     returnData = [
         team_name,
@@ -170,11 +199,12 @@ def figmaFileInfoToSheetStyle(file_data, project_data):
         createMomaPersonLink(lastUser),
         createSheetsImage(lastUserImg),
         createSheetsImage(file_data["thumbnail_url"]),
-        versionCount,
-        label,
-        description,
-        ' '.join(tags)
-    ]
+        versionCount]
+
+    metaData.sort(key=lambda x: x.get('title'))
+    for item in metaData:
+        returnData.append(item["data"])
+
     return returnData
 
 
@@ -182,7 +212,7 @@ def figmaFileInfoToSheetStyle(file_data, project_data):
 def main():
     teamList = getConfiguration()
     range_counter = 1
-    for team in teamList:  # Skip the header row
+    for team in teamList:
         global team_name, headers
         headers["X-FIGMA-TOKEN"] = team[0]
         team_id = team[1]
