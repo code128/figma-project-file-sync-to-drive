@@ -35,3 +35,13 @@ https://www.figma.com/file/RwLRoiiage5tSarrPayful/Apps-on-CR-Conceptspo
 https://docs.google.com/presentation/d/1Tf6F-BzISslLBAWYnkB0LY52yaNtzTH4xvAqa4qk0XQ
 
 https://docs.google.com/presentation/d/1Tf6F-BzISslLBAWYnkB0LY52yaNtzTH4xvAqa4qk0XQ/edit#slide=id._76:1_950809884
+
+
+Links are getting stripped at :'s 
+Fixed that. 
+Need to look in the styleOverrideTable to and the ones that are 'hyperlink' and get the url 
+
+respJson["nodes"][metadata_node_id]["document"]["children"][0]['children'][4]
+    ['styleOverrideTable']['4']['hyperlink']['url']
+'https://docs.google.com/presentation/d/1eyhLnHO8fZFC1gYYtYFG30bkxt3rFPmoXXb7oCWJ3qc/edit#slide=id.p'
+

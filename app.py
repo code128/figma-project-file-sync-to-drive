@@ -98,16 +98,27 @@ def getFigmaFileGoogleMetadata(file_id, metadata_node_id=""):
     respJson = response.json()
     gMetadata = []
     childList = respJson["nodes"][metadata_node_id]["document"]["children"][0]["children"]
+
     # This gets us the children of the first and only frame from this node
+    # TODO:
+# Need to look in the styleOverrideTable to and the ones that are 'hyperlink' and get the url
+
+# respJson["nodes"][metadata_node_id]["document"]["children"][0]['children'][4]
+# ['styleOverrideTable']['4']['hyperlink']['url']
+# 'https://docs.google.com/presentation/d/1eyhLnHO8fZFC1gYYtYFG30bkxt3rFPmoXXb7oCWJ3qc/edit#slide=id.p'
+
     for child in childList:
-        try:
-            data = child["characters"].split(":")
-            item = {}
-            item["title"] = data[0]  # Everything before the first :
-            item["data"] = data[1].strip()
-            gMetadata.append(item)
-        except Exception as E:
-            print(E)
+        if child["type"] == "TEXT":
+            try:
+                item = {}
+                # Everything before the first :
+                item["title"] = child["characters"].split(":")[0]
+                colonLocation = child["characters"].find(":")
+                # everything after the :
+                item["data"] = child["characters"][colonLocation + 1:]
+                gMetadata.append(item)
+            except Exception as E:
+                print(E)
     return gMetadata
 
 
