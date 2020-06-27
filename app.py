@@ -98,14 +98,7 @@ def getFigmaFileGoogleMetadata(file_id, metadata_node_id=""):
     respJson = response.json()
     gMetadata = []
     childList = respJson["nodes"][metadata_node_id]["document"]["children"][0]["children"]
-
     # This gets us the children of the first and only frame from this node
-    # TODO:
-# Need to look in the styleOverrideTable to and the ones that are 'hyperlink' and get the url
-
-# respJson["nodes"][metadata_node_id]["document"]["children"][0]['children'][4]
-# ['styleOverrideTable']['4']['hyperlink']['url']
-# 'https://docs.google.com/presentation/d/1eyhLnHO8fZFC1gYYtYFG30bkxt3rFPmoXXb7oCWJ3qc/edit#slide=id.p'
 
     for child in childList:
         if child["type"] == "TEXT":
@@ -116,6 +109,15 @@ def getFigmaFileGoogleMetadata(file_id, metadata_node_id=""):
                 colonLocation = child["characters"].find(":")
                 # everything after the :
                 item["data"] = child["characters"][colonLocation + 1:]
+                item["urls"] = []
+                ## Check for URLS in the styleOverrideTable
+                if child["styleOverrideTable"]:
+                    for innerChild in child["styleOverrideTable"]:
+                        try:
+                            url = child["styleOverrideTable"][innerChild]["hyperlink"]["url"]
+                            item["urls"].append(url)
+                        except Exception as E:
+                            print(E)
                 gMetadata.append(item)
             except Exception as E:
                 print(E)
@@ -195,6 +197,15 @@ def figmaFileInfoToSheetStyle(file_data, project_data):
         "https://www.figma.com/file/"+file_data["key"], "Figma File")
     lastUser = versions[0]["user"]["handle"]
     lastUserImg = versions[0]["user"]["img_url"]
+    
+    if lastUser == "Figma System": #Check the last editor and if it's "Figma System" Look in the other versions for a real persons name. 
+        # Not sure where Figma System was coming from, but perhaps some kind of figma update process?
+        for version in versions:
+            if version["user"]["handle"] != "Figma System":
+                lastUser = version["user"]["handle"]
+                lastUserImg = version["user"]["img_url"]
+                break
+
     versionCount = len(versions)
     metaData = file_data["g-metadata"]
 
@@ -214,8 +225,7 @@ def figmaFileInfoToSheetStyle(file_data, project_data):
 
     metaData.sort(key=lambda x: x.get('title'))
     for item in metaData:
-        returnData.append(item["data"])
-
+        returnData.append(item["data"] + ", ".join(item["urls"])) #Add in any URLS that were found in the text block
     return returnData
 
 
@@ -231,8 +241,8 @@ def main():
         print("Start: ", team_name + " []")
         projects_and_files = getProjectFiles(project_list)
         updateFilesWithDeeperData(projects_and_files)
-        # saveLocalJSON(projects_and_files)  # for debuggingp
-        # projects_and_files = loadLocalJSON() # for debugging
+        ## saveLocalJSON(projects_and_files)  # for debugging
+        ## projects_and_files = loadLocalJSON() # for debugging
         range_counter = updateGoogleSheet(projects_and_files, range_counter)
         print("Complete: ", team_name + " [" + str(range_counter) + "]")
     return make_response("Thanks", 201)
