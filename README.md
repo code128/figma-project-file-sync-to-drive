@@ -1,47 +1,27 @@
-# figma-project-file-sync-to-drive
-Utility to get a listing of Team Projects and Files and write them to a shared doc.
+# Figma Projects & Files Listing
 
-## Notes
-Can we add tagging somehow to allow for easier searching?
-	e.g. filtering, master/detail views, triggers
-Who last updated the file? Or owner info?
-Move this into G Sheets for the sorting/filtering etc.
-Related Slide deck link
-Should we back it with a real data store and then use sheets/data dashboard to slice/dice.
-	Which would work best? firebase, firestore, datastore, sql? other?
+Utility to get a listing of Teams Projects and Files and write them into a shared Google Spreadsheet
 
-How can we track what's approved? in production etc? 
-Tagging by frame names? File Names, Dedicated pages?
-Can we mark status and trigger with cloud functions, notifications when "review needed"
+## Why does this exist
 
+1. Birds eye view of multiple teams work
+1. Great for onboarding and understanding what's being worked on
+1. Helps make work shareable across teams and orgs 
 
-## Updates
-Should sort by last updated.
+## The spreadsheet
 
-## Why?
-Birds eye view of team work
-Good for onboarding.
+[Figments Spreadsheet](https://docs.google.com/spreadsheets/d/1m4T72la8TcogXLECMGspXJkeWfPv0YxJ9-eJlGagLjs/edit#gid=0)
 
-## Spreadsheet
-https://docs.google.com/spreadsheets/d/1m4T72la8TcogXLECMGspXJkeWfPv0YxJ9-eJlGagLjs/edit#gid=0
+## Figma Plugins  
 
+[Sync to Slides](https://www.figma.com/community/plugin/749778475482705952/Sync-to-Slides)
+The application looks for this plugin and pulls the related Google Slides deck from it. 
 
-## Plugins
-https://www.figma.com/community/plugin/749778475482705952/Sync-to-Slides
+### Bugs to fix
 
-https://www.figma.com/file/RwLRoiiage5tSarrPayful/Apps-on-CR-Conceptspo
+1. Need to add write empty values into all of the Metadata fields in case the ordering changes (so we're not left with unrelated metadata in the spreadsheet attached to incorrect figma files)
 
+### Bugs fixed
 
-https://docs.google.com/presentation/d/1Tf6F-BzISslLBAWYnkB0LY52yaNtzTH4xvAqa4qk0XQ
-
-https://docs.google.com/presentation/d/1Tf6F-BzISslLBAWYnkB0LY52yaNtzTH4xvAqa4qk0XQ/edit#slide=id._76:1_950809884
-
-
-Links are getting stripped at :'s 
-Fixed that. 
-Need to look in the styleOverrideTable to and the ones that are 'hyperlink' and get the url 
-
-respJson["nodes"][metadata_node_id]["document"]["children"][0]['children'][4]
-    ['styleOverrideTable']['4']['hyperlink']['url']
-'https://docs.google.com/presentation/d/1eyhLnHO8fZFC1gYYtYFG30bkxt3rFPmoXXb7oCWJ3qc/edit#slide=id.p'
-
+    Links are getting stripped at :'s 
+    Parse through styleOverrideTable to find urls that are type 'hyperlink' 
