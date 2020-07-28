@@ -13,12 +13,14 @@ Utility to get a listing of Teams Projects and Files and write them into a share
 
 ### Bugs to fix
 
-1. Need to add write empty values into all of the Metadata fields in case the ordering changes (so we're not left with unrelated metadata in the spreadsheet attached to incorrect figma files)
+1. Counter of items created is incorrect (and the range counter passed around is odd)
 
 ### Bugs fixed
 
     Links are getting stripped at :'s 
     Parse through styleOverrideTable to find urls that are type 'hyperlink' 
+    Need to add write empty values into all of the Metadata fields in case the ordering changes (so we're not left with unrelated metadata in the spreadsheet attached to incorrect figma files)
+
 
 ### Updates Needed
 

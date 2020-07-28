@@ -249,7 +249,7 @@ def main():
         # saveLocalJSON(projects_and_files)  # for debugging
         # projects_and_files = loadLocalJSON() # for debugging
         range_counter = updateGoogleSheet(projects_and_files, range_counter)
-        print("  Completing Team: {} wrote {} entries to the spreadsheet.".format(
+        print("    Completing Team: {} wrote {} entries to the spreadsheet.".format(
             team_name, range_counter))
     return make_response("Thanks", 201)
 
