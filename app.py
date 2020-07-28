@@ -33,7 +33,7 @@ figma_api_url = "https://api.figma.com/v1/"
 
 google_slide_deck_prefix = 'https://docs.google.com/presentation/d/'
 buganizerPrefix = 'https://b.corp.google.com/issues/'
-configRange = "config!B:C"
+configRange = "config!A:C"
 
 
 def getConfiguration():
@@ -41,6 +41,8 @@ def getConfiguration():
     request = service.spreadsheets().values().get(
         spreadsheetId=spreadsheet_id, range=configRange)
     response = request.execute()
+    print("Team Configuration:")
+    pprint.pprint(response["values"])
     return response["values"][1:]
 
 
@@ -110,14 +112,14 @@ def getFigmaFileGoogleMetadata(file_id, metadata_node_id=""):
                 # everything after the :
                 item["data"] = child["characters"][colonLocation + 1:]
                 item["urls"] = []
-                ## Check for URLS in the styleOverrideTable
+                # Check for URLS in the styleOverrideTable
                 if child["styleOverrideTable"]:
                     for innerChild in child["styleOverrideTable"]:
                         try:
                             url = child["styleOverrideTable"][innerChild]["hyperlink"]["url"]
                             item["urls"].append(url)
                         except Exception as E:
-                            print(E)
+                            pass  # print(E)
                 gMetadata.append(item)
             except Exception as E:
                 print(E)
@@ -147,7 +149,7 @@ def updateGoogleSheet(projects_and_files, range_counter):
             result = service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id, range=range_name,
                 valueInputOption="USER_ENTERED", body=body).execute()
-            print('{0} cells updated.'.format(result.get('updatedCells')))
+            # print('{0} cells updated.'.format(result.get('updatedCells')))
     return range_counter
 
 
@@ -174,7 +176,7 @@ def getRelatedBuganizerTicket(title):
 def figmaFileInfoToSheetStyle(file_data, project_data):
     # figmaFileInfo looks like this:
     # { "key": "RwLRoiiage5tSarrPayful",
-    #   "name": "Apps on CR Concepts",
+    #   "name": "blah blah blah Concepts",
     # "thumbnail_url": "https://s3-alpha-sig.figma.com/thumbnails/4c3c4d42-50fd-4f21-b6fa-9fe041a517ca?Expires=1591574400&Signature=dxKSU9zP5hATCJvfFNWyTy8f-1qz41F6BYlUjA-jcINRSM-jJiJUtB1OemCzKyRBWfN85CgJhg0GucVpeJfhcc~x~VEIpqqn-kgGdzE4t3yqgmIeOipuZb75owldyxegqxO5Q2QdPdT0DrYgsrEdI13eD8OV-MM-LiWQqjIwkp7pIEba86~~6oIKDRT-lUJl59oyZT-FLpncWdReMgNj6gUdE~pkxTLrGBSqZmH3ULkLamzrQ2HgxNh4oM2n3uhjXsCTdeSAYvefuqWt8-qYb7WpatxgYOEvccMvSU97FLzfLwjHQHyedry7BOR7Lw0YhDdRHWsZpFB-wRwY6Hxymg__&Key-Pair-Id=APKAINTVSUGEWH5XD5UA",
     # "last_modified": "2020-04-27T22:00:44Z",
     # "fileInfo": {
@@ -185,7 +187,7 @@ def figmaFileInfoToSheetStyle(file_data, project_data):
     # 		"label": "Version Testing",
     #		"description": "Adding something to the description. #one @two",
     #		"user": {
-    #				"handle": "Joe Giovenco",
+    #				"handle": "First Last",
     #				"img_url": "https://s3-alpha.figma.com/profile/e9bd6005-6ec5-4134-af83-af16aae402b1",
     #				"id": "767119165052046715"
     #			},
@@ -197,8 +199,9 @@ def figmaFileInfoToSheetStyle(file_data, project_data):
         "https://www.figma.com/file/"+file_data["key"], "Figma File")
     lastUser = versions[0]["user"]["handle"]
     lastUserImg = versions[0]["user"]["img_url"]
-    
-    if lastUser == "Figma System": #Check the last editor and if it's "Figma System" Look in the other versions for a real persons name. 
+
+    # Check the last editor and if it's "Figma System" Look in the other versions for a real persons name.
+    if lastUser == "Figma System":
         # Not sure where Figma System was coming from, but perhaps some kind of figma update process?
         for version in versions:
             if version["user"]["handle"] != "Figma System":
@@ -225,32 +228,43 @@ def figmaFileInfoToSheetStyle(file_data, project_data):
 
     metaData.sort(key=lambda x: x.get('title'))
     for item in metaData:
-        returnData.append(item["data"] + ", ".join(item["urls"])) #Add in any URLS that were found in the text block
+        # Add in any URLS that were found in the text block
+        returnData.append(item["data"] + ", ".join(item["urls"]))
     return returnData
 
 
 @ app.route('/')
 def main():
     teamList = getConfiguration()
+    clearGoogleSheet()
     range_counter = 1
     for team in teamList:
         global team_name, headers
-        headers["X-FIGMA-TOKEN"] = team[0]
-        team_id = team[1]
+        headers["X-FIGMA-TOKEN"] = team[1]
+        team_id = team[2]
         team_name, project_list = getTeamAndProjects(team_id)
-        print("Start: ", team_name + " []")
+        print("Starting request of Figma information for Team: ", team_name)
         projects_and_files = getProjectFiles(project_list)
         updateFilesWithDeeperData(projects_and_files)
-        ## saveLocalJSON(projects_and_files)  # for debugging
-        ## projects_and_files = loadLocalJSON() # for debugging
+        # saveLocalJSON(projects_and_files)  # for debugging
+        # projects_and_files = loadLocalJSON() # for debugging
         range_counter = updateGoogleSheet(projects_and_files, range_counter)
-        print("Complete: ", team_name + " [" + str(range_counter) + "]")
+        print("  Completing Team: {} wrote {} entries to the spreadsheet.".format(
+            team_name, range_counter))
     return make_response("Thanks", 201)
 
 
+def clearGoogleSheet():
+    '''Empty out the raw_data sheet so we don't accidently leave
+     bad data behind(covers deleted files / projects / teams etc)'''
+    result = service.spreadsheets().values().clear(
+        spreadsheetId=spreadsheet_id, range="raw_data!A2:Z",).execute()
+    return
+
 #- Utilities -#
 
-@app.template_filter()
+
+@ app.template_filter()
 def friendly_time(value):
     return arrow.get(value).humanize()
 
