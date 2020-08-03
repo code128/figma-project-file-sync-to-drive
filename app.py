@@ -1,4 +1,6 @@
 # Imports
+# pylint:disable=E1101
+
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import pprint
